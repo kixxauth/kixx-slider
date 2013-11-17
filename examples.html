@@ -140,7 +140,7 @@
 				slides.next();
 			}
 
-			$('#slide-show-a')
+			$('#slide-show-a').closest('.slide-show-wrapper')
 				.find('a.slides-control-previous').on('click', previous)
 				.end()
 				.find('a.slides-control-next').on('click', next);
