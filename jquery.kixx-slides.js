@@ -1,9 +1,13 @@
 (function ($, window, document, undefined) {
   var kixxSlides
 
-  $.fn.kixxSlides = kixxSlides = function () {
-    var slides = new KixxSlides({$container: this})
-    slides.initialize();
+  $.fn.kixxSlides = kixxSlides = function (opts) {
+    opts = opts || {};
+    opts.$container = this;
+
+    var slides = new KixxSlides(opts)
+    slides.initialize(opts);
+
     return slides;
   };
 
@@ -11,18 +15,15 @@
     this.$container = $(opts.$container[0]);
     this.$current = null;
     this.$slides = this.$container.children();
-    this.aspectRatio = opts.aspectRatio || 1.5;
   }
 
   KixxSlides.fn = KixxSlides.prototype = {
     $container: null,
     $slides: null,
     $current: null,
-    aspectRatio: 1.5,
 
-    initialize: function () {
-      var width = this.currentWidth()
-        , height = Math.floor(width / this.aspectRatio)
+    initialize: function (opts) {
+      var aspectRatio = opts.aspectRatio || 1.5
 
       this.$slides.hide();
 
@@ -31,8 +32,12 @@
       , overflow: 'hidden'
       , listStyleType: 'none'
       , padding: 0
-      , height: height
+      , height: Math.floor(this.currentWidth() / aspectRatio)
       })
+
+      if (opts.initial) {
+        this.show(opts.initial);
+      }
     },
 
     previous: function (opts) {
@@ -46,15 +51,22 @@
         , complete = refunct(opts, 'complete')
         , $next = this.$previous()
         , hideDone = false
-        , showDone = true
+        , showDone = false
 
-      this.containSlide($next.show()).css({
+      if ($next.data('kixxSlidesOpen')) {
+        complete(this.$current, this.$current);
+        return;
+      }
+
+      $next.css({
         position: 'absolute'
       , top: 0
       , left: -(width - 1)
       , width: width
       , height: self.currentHeight()
+      , display: 'block'
       });
+      this.containSlide($next);
 
       function maybeComplete(done) {
         if (done.show) {
@@ -64,8 +76,13 @@
         }
 
         if (hideDone && showDone) {
+          var $from = self.$current
+          if (self.$current) {
+            self.$current.data('kixxSlidesOpen', false);
+          }
+          $next.data('kixxSlidesOpen', true);
           self.$current = $next;
-          complete();
+          complete($from, $next);
         }
       }
 
@@ -78,12 +95,7 @@
         maybeComplete({show: true});
       };
 
-      if (this.$current) {
-        this.$current.animate(outProps, opts);
-      } else {
-        maybeComplete({hide: true});
-      }
-
+      this.$current.animate(outProps, opts);
       $next.animate(inProps, inOpts);
     },
 
@@ -98,15 +110,22 @@
         , complete = refunct(opts, 'complete')
         , $next = this.$next()
         , hideDone = false
-        , showDone = true
+        , showDone = false
 
-      this.containSlide($next.show()).css({
+      if ($next.data('kixxSlidesOpen')) {
+        complete(this.$current, this.$current);
+        return;
+      }
+
+      $next.css({
         position: 'absolute'
       , top: 0
       , left: width + 1
       , width: width
       , height: self.currentHeight()
+      , display: 'block'
       });
+      this.containSlide($next);
 
       function maybeComplete(done) {
         if (done.show) {
@@ -116,8 +135,11 @@
         }
 
         if (hideDone && showDone) {
+          var $from = self.$current
+          self.$current.data('kixxSlidesOpen', false);
+          $next.data('kixxSlidesOpen', true);
           self.$current = $next;
-          complete();
+          complete($from, $next);
         }
       }
 
@@ -146,9 +168,15 @@
       var self = this
         , fadeInOpts =  $.extend({}, opts)
         , $next = $('#'+ id)
+        , complete = refunct(opts, 'complete')
+
+      if ($next.data('kixxSlidesOpen')) {
+        complete(this.$current, this.$current);
+        return;
+      }
 
       opts.complete = function () {
-        self.containSlide($next).css({
+        $next.css({
           position: 'absolute'
         , top: 0
         , left: 0
@@ -156,13 +184,28 @@
         , height: self.currentHeight()
         }).fadeIn(fadeInOpts);
 
+        self.containSlide($next)
+
+        if (self.$current) {
+          self.$current.data('kixxSlidesOpen', false);
+        }
+        $next.data('kixxSlidesOpen', true);
+        var $from = self.$current
         self.$current = $next;
+        complete($from, $next);
       };
 
       if (this.$current) {
         this.$current.fadeOut(opts);
       } else {
         opts.complete();
+      }
+    },
+
+    destroy: function () {
+      if(this.$current) {
+        this.$current.hide().data('kixxSlidesOpen', false);
+        this.$current = null;
       }
     },
 
@@ -194,11 +237,23 @@
       var $inner = $slide.find('img')
         , width = this.currentWidth()
         , height = this.currentHeight()
-        , w = +$inner.attr('width')
-        , h = +$inner.attr('height')
+        , usedHeight = 0
+        , h = +$inner.outerHeight(true)
+        , w = +$inner.outerWidth(true)
         , ar = w / h
         , marginLeft = 0
         , marginTop = 0
+      if ($inner.data('kixxSlidesContainerWidth') == width || $inner.data('kixxSlidesContainerHeight') == height) {
+        return $slide;
+      }
+      $inner.data('kixxSlidesContainerWidth', width);
+      $inner.data('kixxSlidesContainerHeight', height);
+
+      $inner.siblings().each(function () {
+        usedHeight += $(this).outerHeight(true);
+      });
+
+      height = height - usedHeight;
 
       if ((w - width) > 0 || (h - height) > 0) {
         if (w/width < h/height) {
